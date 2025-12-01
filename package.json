@@ -1,5 +1,5 @@
 {
-  "name": "wpjs-api",
+  "name": "wpjsapi",
   "version": "2.0.0",
   "description": "Library to use WordPress REST API easily in any JS project",
   "type": "module",
@@ -40,9 +40,9 @@
   "author": "Àngel Ayach Boadas",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Ayach90/wpjs-api/issues"
+    "url": "https://github.com/Ayach90/wpjsapi/issues"
   },
-  "homepage": "https://github.com/Ayach90/wpjs-api#readme",
+  "homepage": "https://github.com/Ayach90/wpjsapi#readme",
   "devDependencies": {
     "@types/node": "^20.8.0",
     "@vitest/coverage-v8": "^2.1.9",
