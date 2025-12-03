@@ -1,6 +1,6 @@
 {
-  "name": "wpjsapi",
-  "version": "3.0.0",
+  "name": "wpjsapi-lib",
+  "version": "3.0.1",
   "description": "Library to use WordPress REST API easily in any JS project",
   "type": "module",
   "exports": {
