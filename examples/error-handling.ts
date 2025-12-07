@@ -17,7 +17,7 @@ const auth = createAuth({
 });
 
 const posts = createPostsEndpoints({
-  baseUrl: process.env.WP_URL || "https://example.com/wp-json",
+  baseUrl: process.env.WP_URL || "",
   auth,
 });
 
