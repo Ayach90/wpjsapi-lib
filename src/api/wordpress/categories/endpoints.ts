@@ -15,6 +15,7 @@ import {
   apiDelete,
   buildResourcePath,
 } from "../http";
+import { createPaginationHelpers } from "../utils";
 
 /**
  * Base path for WordPress categories API endpoints
@@ -65,83 +66,6 @@ export const createCategoryEndpoints = ({
         options?.signal
       );
     },
-
-    /**
-     * Get all categories by automatically handling pagination
-     * @param params Optional parameters to filter and sort categories (page and per_page will be overridden)
-     * @param options Optional request options (e.g., signal for aborting)
-     * @returns Promise with an array of all matching categories
-     * @example
-     * // Get all categories
-     * const allCategories = await api.categories.listAll();
-     *
-     * // Get all child categories of a specific parent
-     * const allCategories = await api.categories.listAll({ parent: 123 });
-     *
-     * // Get all with abort signal
-     * const controller = new AbortController();
-     * const allCategories = await api.categories.listAll({}, { signal: controller.signal });
-     */
-    listAll: async (
-      params?: Omit<WPCategoryParameters, "page" | "per_page">,
-      options?: RequestOptions
-    ): Promise<WPCategory[]> => {
-      const allCategories: WPCategory[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await endpoints.list(
-          {
-            ...params,
-            page: currentPage,
-            per_page: 100, // Maximum allowed by WordPress
-          },
-          options
-        );
-
-        allCategories.push(...response.items);
-        hasMore = response.pagination.hasMore;
-        currentPage++;
-      }
-
-      return allCategories;
-    },
-
-    /**
-     * Create an async iterator to process categories page by page
-     * @param params Optional parameters to filter and sort categories
-     * @param options Optional request options (e.g., signal for aborting)
-     * @returns AsyncIterator that yields each page of categories with pagination info
-     * @example
-     * // Process all categories page by page
-     * for await (const page of api.categories.pages()) {
-     *   console.log(`Processing page ${page.pagination.currentPage} of ${page.pagination.totalPages}`);
-     *   for (const category of page.items) {
-     *     // Process each category
-     *   }
-     * }
-     */
-    pages: (params?: WPCategoryParameters, options?: RequestOptions) => ({
-      async *[Symbol.asyncIterator]() {
-        let currentPage = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await endpoints.list(
-            {
-              ...params,
-              page: currentPage,
-            },
-            options
-          );
-
-          yield response;
-          hasMore = response.pagination.hasMore;
-          currentPage++;
-        }
-      },
-    }),
 
     /**
      * Get a single category by ID
@@ -271,5 +195,9 @@ export const createCategoryEndpoints = ({
     },
   };
 
-  return endpoints;
+  const paginationHelpers = createPaginationHelpers(endpoints.list);
+  return {
+    ...endpoints,
+    ...paginationHelpers,
+  };
 };

@@ -43,8 +43,12 @@ export class WPApiError extends Error {
     this.data = options?.data;
 
     // Maintains proper stack trace for where error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, WPApiError);
+    const errorWithStackTrace = Error as ErrorConstructor & {
+      captureStackTrace?: (targetObject: object, constructorOpt?: Function) => void;
+    };
+
+    if (errorWithStackTrace.captureStackTrace) {
+      errorWithStackTrace.captureStackTrace(this, WPApiError);
     }
   }
 

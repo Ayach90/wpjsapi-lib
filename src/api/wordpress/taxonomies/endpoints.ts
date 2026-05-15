@@ -2,8 +2,7 @@ import type { WPTaxonomy, WPTaxonomyParameters, RequestOptions } from "./types";
 import type { AuthResponse } from "../../../auth";
 import { WPPaginatedResponse } from "../types";
 import { createPaginationHelpers } from "../utils";
-import { handleApiError } from "../errors";
-import { apiGet } from "../http";
+import { apiGet, makeApiRequest, extractPaginationInfo } from "../http";
 
 /**
  * Base path for WordPress taxonomies API endpoints
@@ -46,52 +45,25 @@ export const createTaxonomiesEndpoints = ({
       params?: WPTaxonomyParameters,
       options?: RequestOptions
     ): Promise<WPPaginatedResponse<WPTaxonomy>> => {
-      const searchParams = new URLSearchParams();
-
-      if (params) {
-        Object.entries(params).forEach(([key, value]) => {
-          if (value !== undefined) {
-            searchParams.append(key, value.toString());
-          }
-        });
-      }
-
-      const queryString = searchParams.toString();
-      const url = `${baseUrl}${BASE_PATH}${
-        queryString ? `?${queryString}` : ""
-      }`;
-
-      await auth?.beforeRequest?.();
-
-      const response = await fetch(url, {
-        headers: auth?.headers || {},
+      const response = await makeApiRequest({
+        baseUrl,
+        path: BASE_PATH,
+        params,
+        auth,
         signal: options?.signal,
       });
 
-      if (!response.ok) {
-        if (auth?.shouldRefresh && (await auth.shouldRefresh(response))) {
-          await auth.refresh?.();
-          return endpoints.list(params, options);
-        }
-        await handleApiError(response);
-      }
-
-      const processedResponse = auth?.afterRequest
-        ? await auth.afterRequest(response)
-        : response;
-
-      const items: Record<string, WPTaxonomy> = await processedResponse.json();
+      const items: Record<string, WPTaxonomy> = await response.json();
       // Convert record to array
       const itemsArray = Object.values(items);
-      const total = response.headers.get("X-WP-Total");
-      const totalPages = response.headers.get("X-WP-TotalPages");
+      const pagination = extractPaginationInfo(response, params);
 
       return {
         items: itemsArray,
         pagination: {
-          total: total ? parseInt(total, 10) : itemsArray.length,
-          totalPages: totalPages ? parseInt(totalPages, 10) : 1,
-          currentPage: params?.page || 1,
+          ...pagination,
+          total: pagination.total || itemsArray.length,
+          totalPages: pagination.totalPages || 1,
           perPage: params?.per_page || itemsArray.length,
           hasMore: false, // Taxonomies are always returned in a single page
         },

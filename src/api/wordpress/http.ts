@@ -17,6 +17,19 @@ import type { AuthResponse } from "../../auth";
  * normalizeUrl("https://site.com", "wp/v2/posts") // "https://site.com/wp/v2/posts"
  */
 export function normalizeUrl(baseUrl: string, path: string): string {
+  if (!baseUrl) {
+    throw new TypeError("baseUrl must be an absolute http(s) URL");
+  }
+
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new TypeError("baseUrl must use http or https");
+    }
+  } catch {
+    throw new TypeError("baseUrl must be an absolute http(s) URL");
+  }
+
   // Remove trailing slash from baseUrl if present
   const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
 
@@ -94,12 +107,16 @@ export interface ApiRequestConfig {
   auth?: AuthResponse;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  maxAuthRetries?: number;
 }
 
 /**
  * Make an API request with authentication and error handling
  */
-export async function makeApiRequest(config: ApiRequestConfig): Promise<Response> {
+export async function makeApiRequest(
+  config: ApiRequestConfig,
+  retryCount = 0
+): Promise<Response> {
   const {
     baseUrl,
     path,
@@ -109,6 +126,7 @@ export async function makeApiRequest(config: ApiRequestConfig): Promise<Response
     auth,
     headers = {},
     signal,
+    maxAuthRetries = 1,
   } = config;
 
   const url = buildUrl(baseUrl, path, params);
@@ -116,24 +134,31 @@ export async function makeApiRequest(config: ApiRequestConfig): Promise<Response
   // Call beforeRequest hook if available
   await auth?.beforeRequest?.();
 
+  const requestHeaders = new Headers(headers);
+  if (auth?.headers) {
+    new Headers(auth.headers).forEach((value, key) => {
+      requestHeaders.set(key, value);
+    });
+  }
+
   const requestInit: RequestInit = {
     method,
-    headers: {
-      ...headers,
-      ...auth?.headers,
-    },
+    headers: requestHeaders,
     signal,
   };
 
   // Add body for POST/PUT/PATCH requests
-  if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
-    requestInit.body = JSON.stringify(body);
-    const headersObj = headers as Record<string, string>;
-    if (!headersObj["Content-Type"]) {
-      requestInit.headers = {
-        ...requestInit.headers,
-        "Content-Type": "application/json",
-      };
+  if (
+    body !== undefined &&
+    (method === "POST" || method === "PUT" || method === "PATCH")
+  ) {
+    if (body instanceof FormData || body instanceof Blob) {
+      requestInit.body = body;
+    } else {
+      requestInit.body = JSON.stringify(body);
+      if (!requestHeaders.has("Content-Type")) {
+        requestHeaders.set("Content-Type", "application/json");
+      }
     }
   }
 
@@ -141,10 +166,14 @@ export async function makeApiRequest(config: ApiRequestConfig): Promise<Response
 
   // Handle errors
   if (!response.ok) {
-    if (auth?.shouldRefresh && (await auth.shouldRefresh(response))) {
+    if (
+      retryCount < maxAuthRetries &&
+      auth?.shouldRefresh &&
+      (await auth.shouldRefresh(response))
+    ) {
       await auth.refresh?.();
       // Retry the request after refresh
-      return makeApiRequest(config);
+      return makeApiRequest(config, retryCount + 1);
     }
     await handleApiError(response);
   }
@@ -304,5 +333,6 @@ export function buildResourcePath(
   basePath: string,
   id?: number | string
 ): string {
-  return id !== undefined ? `${basePath}/${id}` : basePath;
+  if (id === undefined) return basePath;
+  return `${basePath.replace(/\/+$/, "")}/${id}`;
 }

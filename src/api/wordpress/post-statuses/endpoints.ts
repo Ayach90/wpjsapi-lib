@@ -6,8 +6,7 @@ import type {
 import type { AuthResponse } from "../../../auth";
 import { WPPaginatedResponse } from "../types";
 import { createPaginationHelpers } from "../utils";
-import { apiGet } from "../http";
-import { handleApiError } from "../errors";
+import { apiGet, extractPaginationInfo, makeApiRequest } from "../http";
 
 /**
  * Base path for WordPress post statuses API endpoints
@@ -47,53 +46,26 @@ export const createPostStatusesEndpoints = ({
       params?: WPPostStatusParameters,
       options?: RequestOptions
     ): Promise<WPPaginatedResponse<WPPostStatus>> => {
-      const searchParams = new URLSearchParams();
-
-      if (params) {
-        Object.entries(params).forEach(([key, value]) => {
-          if (value !== undefined) {
-            searchParams.append(key, value.toString());
-          }
-        });
-      }
-
-      const queryString = searchParams.toString();
-      const url = `${baseUrl}${BASE_PATH}${
-        queryString ? `?${queryString}` : ""
-      }`;
-
-      await auth?.beforeRequest?.();
-
-      const response = await fetch(url, {
-        headers: auth?.headers || {},
+      const response = await makeApiRequest({
+        baseUrl,
+        path: BASE_PATH,
+        params,
+        auth,
         signal: options?.signal,
       });
 
-      if (!response.ok) {
-        if (auth?.shouldRefresh && (await auth.shouldRefresh(response))) {
-          await auth.refresh?.();
-          return endpoints.list(params, options);
-        }
-        await handleApiError(response);
-      }
-
-      const processedResponse = auth?.afterRequest
-        ? await auth.afterRequest(response)
-        : response;
-
       const items: Record<string, WPPostStatus> =
-        await processedResponse.json();
+        await response.json();
       // Convert record to array
       const itemsArray = Object.values(items);
-      const total = response.headers.get("X-WP-Total");
-      const totalPages = response.headers.get("X-WP-TotalPages");
+      const pagination = extractPaginationInfo(response, params);
 
       return {
         items: itemsArray,
         pagination: {
-          total: total ? parseInt(total, 10) : itemsArray.length,
-          totalPages: totalPages ? parseInt(totalPages, 10) : 1,
-          currentPage: params?.page || 1,
+          ...pagination,
+          total: pagination.total || itemsArray.length,
+          totalPages: pagination.totalPages || 1,
           perPage: params?.per_page || itemsArray.length,
           hasMore: false, // Post statuses are always returned in a single page
         },

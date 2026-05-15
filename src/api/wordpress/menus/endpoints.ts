@@ -19,6 +19,7 @@ import {
   apiDelete,
   buildResourcePath,
 } from "../http";
+import { createPaginationHelpers } from "../utils";
 
 /**
  * Base paths for WordPress menus API endpoints
@@ -37,19 +38,11 @@ interface MenusEndpointsConfig {
 /**
  * Menus API endpoints
  */
-interface MenuEndpoints {
+interface MenuBaseEndpoints {
   list: (
     params?: WPMenuParameters,
     options?: RequestOptions
   ) => Promise<WPPaginatedResponse<WPMenu>>;
-  listAll: (
-    params?: Omit<WPMenuParameters, "page" | "per_page">,
-    options?: RequestOptions
-  ) => Promise<WPMenu[]>;
-  pages: (
-    params?: WPMenuParameters,
-    options?: RequestOptions
-  ) => AsyncIterableIterator<WPPaginatedResponse<WPMenu>>;
   get: (
     id: number,
     context?: "view" | "embed" | "edit",
@@ -68,14 +61,6 @@ interface MenuEndpoints {
       params?: WPMenuItemParameters,
       options?: RequestOptions
     ) => Promise<WPPaginatedResponse<WPMenuItem>>;
-    listAll: (
-      params?: Omit<WPMenuItemParameters, "page" | "per_page">,
-      options?: RequestOptions
-    ) => Promise<WPMenuItem[]>;
-    pages: (
-      params?: WPMenuItemParameters,
-      options?: RequestOptions
-    ) => AsyncIterableIterator<WPPaginatedResponse<WPMenuItem>>;
     get: (
       id: number,
       context?: "view" | "embed" | "edit",
@@ -99,7 +84,7 @@ export const createMenuEndpoints = ({
   baseUrl,
   auth,
 }: MenusEndpointsConfig) => {
-  const endpoints: MenuEndpoints = {
+  const endpoints: MenuBaseEndpoints = {
     /**
      * Get a list of menus
      * @param params Optional parameters to filter, sort and paginate the menus
@@ -125,82 +110,6 @@ export const createMenuEndpoints = ({
         options?.signal
       );
     },
-
-    /**
-     * Get all menus by automatically handling pagination
-     * @param params Optional parameters to filter and sort menus (page and per_page will be overridden)
-     * @param options Optional request options (e.g., signal for aborting)
-     * @returns Promise with an array of all matching menus
-     * @example
-     * // Get all menus
-     * const allMenus = await api.menus.listAll();
-     *
-     * // Get with abort signal
-     * const controller = new AbortController();
-     * const allMenus = await api.menus.listAll({}, { signal: controller.signal });
-     */
-    listAll: async (
-      params?: Omit<WPMenuParameters, "page" | "per_page">,
-      options?: RequestOptions
-    ): Promise<WPMenu[]> => {
-      const allMenus: WPMenu[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await endpoints.list(
-          {
-            ...params,
-            page: currentPage,
-            per_page: 100, // Maximum allowed by WordPress
-          },
-          options
-        );
-
-        allMenus.push(...response.items);
-        hasMore = response.pagination.hasMore;
-        currentPage++;
-      }
-
-      return allMenus;
-    },
-
-    /**
-     * Create an async iterator to process menus page by page
-     * @param params Optional parameters to filter and sort menus
-     * @param options Optional request options (e.g., signal for aborting)
-     * @returns AsyncIterator that yields each page of menus with pagination info
-     * @example
-     * // Process all menus page by page
-     * for await (const page of api.menus.pages()) {
-     *   console.log(`Processing page ${page.pagination.currentPage} of ${page.pagination.totalPages}`);
-     *   for (const menu of page.items) {
-     *     // Process each menu
-     *   }
-     * }
-     */
-    pages: (
-      params?: WPMenuParameters,
-      options?: RequestOptions
-    ): AsyncIterableIterator<WPPaginatedResponse<WPMenu>> =>
-      (async function* () {
-        let currentPage = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await endpoints.list(
-            {
-              ...params,
-              page: currentPage,
-            },
-            options
-          );
-
-          yield response;
-          hasMore = response.pagination.hasMore;
-          currentPage++;
-        }
-      })(),
 
     /**
      * Get a single menu by ID
@@ -342,82 +251,6 @@ export const createMenuEndpoints = ({
       },
 
       /**
-       * Get all menu items by automatically handling pagination
-       * @param params Optional parameters to filter and sort menu items (page and per_page will be overridden)
-       * @param options Optional request options (e.g., signal for aborting)
-       * @returns Promise with an array of all matching menu items
-       * @example
-       * // Get all items from menu 123
-       * const allItems = await api.menus.items.listAll({ menus: [123] });
-       *
-       * // Get with abort signal
-       * const controller = new AbortController();
-       * const allItems = await api.menus.items.listAll({ menus: [123] }, { signal: controller.signal });
-       */
-      listAll: async (
-        params?: Omit<WPMenuItemParameters, "page" | "per_page">,
-        options?: RequestOptions
-      ): Promise<WPMenuItem[]> => {
-        const allItems: WPMenuItem[] = [];
-        let currentPage = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await endpoints.items.list(
-            {
-              ...params,
-              page: currentPage,
-              per_page: 100, // Maximum allowed by WordPress
-            },
-            options
-          );
-
-          allItems.push(...response.items);
-          hasMore = response.pagination.hasMore;
-          currentPage++;
-        }
-
-        return allItems;
-      },
-
-      /**
-       * Create an async iterator to process menu items page by page
-       * @param params Optional parameters to filter and sort menu items
-       * @param options Optional request options (e.g., signal for aborting)
-       * @returns AsyncIterator that yields each page of menu items with pagination info
-       * @example
-       * // Process all menu items page by page
-       * for await (const page of api.menus.items.pages()) {
-       *   console.log(`Processing page ${page.pagination.currentPage} of ${page.pagination.totalPages}`);
-       *   for (const item of page.items) {
-       *     // Process each menu item
-       *   }
-       * }
-       */
-      pages: (
-        params?: WPMenuItemParameters,
-        options?: RequestOptions
-      ): AsyncIterableIterator<WPPaginatedResponse<WPMenuItem>> =>
-        (async function* () {
-          let currentPage = 1;
-          let hasMore = true;
-
-          while (hasMore) {
-            const response = await endpoints.items.list(
-              {
-                ...params,
-                page: currentPage,
-              },
-              options
-            );
-
-            yield response;
-            hasMore = response.pagination.hasMore;
-            currentPage++;
-          }
-        })(),
-
-      /**
        * Get a single menu item by ID
        * @param id The menu item ID
        * @param context Optional context to determine fields in response
@@ -542,5 +375,15 @@ export const createMenuEndpoints = ({
     },
   };
 
-  return endpoints;
+  const menuPaginationHelpers = createPaginationHelpers(endpoints.list);
+  const itemPaginationHelpers = createPaginationHelpers(endpoints.items.list);
+
+  return {
+    ...endpoints,
+    ...menuPaginationHelpers,
+    items: {
+      ...endpoints.items,
+      ...itemPaginationHelpers,
+    },
+  };
 };

@@ -15,6 +15,7 @@ import {
   apiDelete,
   buildResourcePath,
 } from "../http";
+import { createPaginationHelpers } from "../utils";
 
 /**
  * Base path for WordPress posts API endpoints
@@ -88,89 +89,6 @@ export const createPostsEndpoints = ({
         options?.signal
       );
     },
-
-    /**
-     * Get all posts by automatically handling pagination
-     * @param params Optional parameters to filter and sort posts (page and per_page will be overridden)
-     * @param options Optional request options (e.g., AbortSignal)
-     * @returns Promise with an array of all matching posts
-     * @example
-     * // Get all published posts
-     * const allPosts = await api.posts.listAll();
-     *
-     * // Get all posts from a specific category
-     * const allPosts = await api.posts.listAll({ categories: [123] });
-     *
-     * // With abort signal
-     * const controller = new AbortController();
-     * const allPosts = await api.posts.listAll({}, { signal: controller.signal });
-     */
-    listAll: async (
-      params?: Omit<WPPostParameters, "page" | "per_page">,
-      options?: RequestOptions
-    ): Promise<WPPost[]> => {
-      const allPosts: WPPost[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await endpoints.list(
-          {
-            ...params,
-            page: currentPage,
-            per_page: 100, // Maximum allowed by WordPress
-          },
-          options
-        );
-
-        allPosts.push(...response.items);
-        hasMore = response.pagination.hasMore;
-        currentPage++;
-      }
-
-      return allPosts;
-    },
-
-    /**
-     * Create an async iterator to process posts page by page
-     * @param params Optional parameters to filter and sort posts
-     * @param options Optional request options (e.g., AbortSignal)
-     * @returns AsyncIterator that yields each page of posts with pagination info
-     * @example
-     * // Process all posts page by page
-     * for await (const page of api.posts.pages()) {
-     *   console.log(`Processing page ${page.pagination.currentPage} of ${page.pagination.totalPages}`);
-     *   for (const post of page.items) {
-     *     // Process each post
-     *   }
-     * }
-     *
-     * // With abort signal
-     * const controller = new AbortController();
-     * for await (const page of api.posts.pages({}, { signal: controller.signal })) {
-     *   // Process page...
-     * }
-     */
-    pages: (params?: WPPostParameters, options?: RequestOptions) => ({
-      async *[Symbol.asyncIterator]() {
-        let currentPage = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await endpoints.list(
-            {
-              ...params,
-              page: currentPage,
-            },
-            options
-          );
-
-          yield response;
-          hasMore = response.pagination.hasMore;
-          currentPage++;
-        }
-      },
-    }),
 
     /**
      * Get a single post by ID
@@ -323,5 +241,9 @@ export const createPostsEndpoints = ({
     },
   };
 
-  return endpoints;
+  const paginationHelpers = createPaginationHelpers(endpoints.list);
+  return {
+    ...endpoints,
+    ...paginationHelpers,
+  };
 };

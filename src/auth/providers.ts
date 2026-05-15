@@ -30,20 +30,11 @@ export class AuthProviders {
   }
 
   static bearer(
-    credentials: BearerAuthCredentials,
-    onRefresh?: (newToken: string) => void | Promise<void>
+    credentials: BearerAuthCredentials
   ): AuthResponse {
     return {
       headers: {
         Authorization: `Bearer ${credentials.token}`,
-      },
-      refresh: async () => {
-        if (credentials.refreshToken && onRefresh) {
-          // Here you would implement the refresh token logic
-          // const newToken = await refreshTokenRequest(credentials.refreshToken);
-          // await onRefresh(newToken);
-          // credentials.token = newToken;
-        }
       },
     };
   }
@@ -57,16 +48,8 @@ export class AuthProviders {
   }
 
   static hmac(credentials: HmacAuthCredentials): AuthResponse {
-    // Placeholder use until HMAC signing is implemented
     void credentials;
-    return {
-      headers: {},
-      beforeRequest: async () => {
-        // Implement HMAC signature generation here
-        // const signature = generateHmacSignature(credentials.apiKey, credentials.secret);
-        // headers['X-Signature'] = signature;
-      },
-    };
+    throw new Error("HMAC auth is not implemented yet");
   }
 
   static nonce(credentials: NonceAuthCredentials): AuthResponse {
@@ -78,22 +61,15 @@ export class AuthProviders {
   }
 
   static oauth2(
-    credentials: OAuth2Credentials,
-    onRefresh?: (newToken: string) => void | Promise<void>
+    credentials: OAuth2Credentials
   ): AuthResponse {
+    if (!credentials.accessToken) {
+      throw new Error("OAuth2 auth requires an accessToken");
+    }
+
     return {
-      headers: credentials.accessToken
-        ? {
-            Authorization: `Bearer ${credentials.accessToken}`,
-          }
-        : {},
-      refresh: async () => {
-        if (credentials.refreshToken && onRefresh) {
-          // Implement OAuth2 refresh token flow here
-          // const newToken = await refreshOAuth2Token(credentials);
-          // await onRefresh(newToken);
-          // credentials.accessToken = newToken;
-        }
+      headers: {
+        Authorization: `Bearer ${credentials.accessToken}`,
       },
     };
   }

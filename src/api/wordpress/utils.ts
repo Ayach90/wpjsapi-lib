@@ -1,6 +1,9 @@
-import { WPPaginatedResponse } from "./types";
+import { RequestOptions, WPPaginatedResponse } from "./types";
 
-type ListFunction<T, P> = (params?: P) => Promise<WPPaginatedResponse<T>>;
+type ListFunction<T, P> = (
+  params?: P,
+  options?: RequestOptions
+) => Promise<WPPaginatedResponse<T>>;
 
 /**
  * Creates pagination helper functions for a list endpoint
@@ -17,27 +20,30 @@ export function createPaginationHelpers<
      * @param params Optional parameters for the list function (page and per_page will be overridden)
      * @returns Promise with all items
      */
-    listAll: async (params?: Omit<P, "page">): Promise<T[]> => {
-      const firstPage = await listFn({
-        ...params,
-        page: 1,
-        per_page: 100,
-      } as P);
-      const totalPages = firstPage.pagination.totalPages;
+    listAll: async (
+      params?: Omit<P, "page" | "per_page">,
+      options?: RequestOptions
+    ): Promise<T[]> => {
+      const items: T[] = [];
+      let page = 1;
+      let hasMore = true;
 
-      if (totalPages === 1) {
-        return firstPage.items;
+      while (hasMore) {
+        const response = await listFn(
+          {
+            ...params,
+            page,
+            per_page: 100,
+          } as P,
+          options
+        );
+
+        items.push(...response.items);
+        hasMore = response.pagination.hasMore;
+        page++;
       }
 
-      const remainingPages = await Promise.all(
-        Array.from({ length: totalPages - 1 }, (_, i) =>
-          listFn({ ...params, page: i + 2, per_page: 100 } as P).then(
-            (response) => response.items
-          )
-        )
-      );
-
-      return [...firstPage.items, ...remainingPages.flat()];
+      return items;
     },
 
     /**
@@ -46,13 +52,14 @@ export function createPaginationHelpers<
      * @returns AsyncGenerator that yields each page of results
      */
     pages: async function* (
-      params?: P
+      params?: P,
+      options?: RequestOptions
     ): AsyncGenerator<WPPaginatedResponse<T>, void, unknown> {
       let page = 1;
       let hasMore = true;
 
       while (hasMore) {
-        const response = await listFn({ ...params, page } as P);
+        const response = await listFn({ ...params, page } as P, options);
         yield response;
 
         const { totalPages = 1 } = response.pagination;

@@ -75,19 +75,12 @@ describe("AuthProviders", () => {
       expect(headers.Authorization).toBe("Bearer abc123xyz");
     });
 
-    it("should include refresh function when refreshToken is provided", () => {
-      const auth = AuthProviders.bearer(
-        {
-          token: "abc123",
-          refreshToken: "refresh456",
-        },
-        async (newToken) => {
-          // Callback
-        }
-      );
+    it("should not expose refresh behavior without an implementation", () => {
+      const auth = AuthProviders.bearer({
+        token: "abc123",
+      });
 
-      expect(auth.refresh).toBeDefined();
-      expect(auth.refresh).toBeTypeOf("function");
+      expect(auth.refresh).toBeUndefined();
     });
   });
 
@@ -116,15 +109,13 @@ describe("AuthProviders", () => {
   });
 
   describe("hmac", () => {
-    it("should create HMAC auth response with beforeRequest hook", () => {
-      const auth = AuthProviders.hmac({
-        apiKey: "key123",
-        secret: "secret456",
-      });
-
-      expect(auth.headers).toEqual({});
-      expect(auth.beforeRequest).toBeDefined();
-      expect(auth.beforeRequest).toBeTypeOf("function");
+    it("should throw because HMAC signing is not implemented", () => {
+      expect(() =>
+        AuthProviders.hmac({
+          apiKey: "key123",
+          secret: "secret456",
+        })
+      ).toThrow("HMAC auth is not implemented yet");
     });
   });
 
@@ -141,31 +132,24 @@ describe("AuthProviders", () => {
       expect(headers.Authorization).toBe("Bearer access123");
     });
 
-    it("should handle missing access token", () => {
+    it("should reject missing access token", () => {
+      expect(() =>
+        AuthProviders.oauth2({
+          clientId: "client123",
+          clientSecret: "secret456",
+          accessToken: "",
+        })
+      ).toThrow("OAuth2 auth requires an accessToken");
+    });
+
+    it("should not expose refresh behavior without an implementation", () => {
       const auth = AuthProviders.oauth2({
         clientId: "client123",
         clientSecret: "secret456",
-        accessToken: "",
+        accessToken: "access123",
       });
 
-      expect(auth.headers).toEqual({});
-    });
-
-    it("should include refresh function when refreshToken is provided", () => {
-      const auth = AuthProviders.oauth2(
-        {
-          clientId: "client123",
-          clientSecret: "secret456",
-          accessToken: "access123",
-          refreshToken: "refresh456",
-        },
-        async (newToken) => {
-          // Callback
-        }
-      );
-
-      expect(auth.refresh).toBeDefined();
-      expect(auth.refresh).toBeTypeOf("function");
+      expect(auth.refresh).toBeUndefined();
     });
   });
 });

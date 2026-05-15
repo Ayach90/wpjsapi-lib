@@ -8,8 +8,14 @@ import type {
 import type { AuthResponse } from "../../../auth";
 import { WPPaginatedResponse } from "../types";
 import { createPaginationHelpers } from "../utils";
-import { handleApiError } from "../errors";
-import { apiGet, apiGetPaginated, apiPut, apiDelete, buildResourcePath } from "../http";
+import {
+  apiGet,
+  apiGetPaginated,
+  apiPut,
+  apiDelete,
+  buildResourcePath,
+  makeApiRequest,
+} from "../http";
 
 /**
  * Base path for WordPress media API endpoints
@@ -116,7 +122,6 @@ export const createMediaEndpoints = ({
       data: WPMediaCreate,
       options?: RequestOptions
     ): Promise<WPMedia> => {
-      const url = `${baseUrl}${BASE_PATH}`;
       const formData = new FormData();
       formData.append("file", data.file);
 
@@ -127,27 +132,15 @@ export const createMediaEndpoints = ({
         }
       });
 
-      await auth?.beforeRequest?.();
-
-      const response = await fetch(url, {
+      const response = await makeApiRequest({
+        baseUrl,
+        path: BASE_PATH,
         method: "POST",
-        headers: auth?.headers || {},
         body: formData,
+        auth,
         signal: options?.signal,
       });
-
-      if (!response.ok) {
-        if (auth?.shouldRefresh && (await auth.shouldRefresh(response))) {
-          await auth.refresh?.();
-          return endpoints.create(data, options);
-        }
-        await handleApiError(response);
-      }
-
-      const processedResponse = auth?.afterRequest
-        ? await auth.afterRequest(response)
-        : response;
-      return processedResponse.json();
+      return response.json();
     },
 
     /**

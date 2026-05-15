@@ -15,6 +15,7 @@ import {
   apiDelete,
   buildResourcePath,
 } from "../http";
+import { createPaginationHelpers } from "../utils";
 
 /**
  * Base path for WordPress pages API endpoints
@@ -71,79 +72,6 @@ export const createPageEndpoints = ({
         options?.signal
       );
     },
-
-    /**
-     * Get all pages by automatically handling pagination
-     * @param params Optional parameters to filter and sort pages (page and per_page will be overridden)
-     * @param options Optional request options (e.g., AbortSignal)
-     * @returns Promise with an array of all matching pages
-     * @example
-     * // Get all published pages
-     * const allPages = await api.pages.listAll();
-     *
-     * // Get all child pages of a specific parent
-     * const allPages = await api.pages.listAll({ parent: [123] });
-     */
-    listAll: async (
-      params?: Omit<WPPageParameters, "page" | "per_page">,
-      options?: RequestOptions
-    ): Promise<WPPage[]> => {
-      const allPages: WPPage[] = [];
-      let currentPage = 1;
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await endpoints.list(
-          {
-            ...params,
-            page: currentPage,
-            per_page: 100, // Maximum allowed by WordPress
-          },
-          options
-        );
-
-        allPages.push(...response.items);
-        hasMore = response.pagination.hasMore;
-        currentPage++;
-      }
-
-      return allPages;
-    },
-
-    /**
-     * Create an async iterator to process pages page by page
-     * @param params Optional parameters to filter and sort pages
-     * @param options Optional request options (e.g., AbortSignal)
-     * @returns AsyncIterator that yields each page of pages with pagination info
-     * @example
-     * // Process all pages page by page
-     * for await (const page of api.pages.pages()) {
-     *   console.log(`Processing page ${page.pagination.currentPage} of ${page.pagination.totalPages}`);
-     *   for (const page of page.items) {
-     *     // Process each page
-     *   }
-     * }
-     */
-    pages: (params?: WPPageParameters, options?: RequestOptions) => ({
-      async *[Symbol.asyncIterator]() {
-        let currentPage = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const response = await endpoints.list(
-            {
-              ...params,
-              page: currentPage,
-            },
-            options
-          );
-
-          yield response;
-          hasMore = response.pagination.hasMore;
-          currentPage++;
-        }
-      },
-    }),
 
     /**
      * Get a single page by ID
@@ -293,5 +221,9 @@ export const createPageEndpoints = ({
     },
   };
 
-  return endpoints;
+  const paginationHelpers = createPaginationHelpers(endpoints.list);
+  return {
+    ...endpoints,
+    ...paginationHelpers,
+  };
 };

@@ -4,7 +4,7 @@ import { AuthProviders } from "./providers";
 export * from "./types";
 
 export function createAuth(config: AuthConfig): AuthResponse {
-  const { method, credentials, onTokenRefresh } = config;
+  const { method, credentials } = config;
 
   switch (method) {
     case "none":
@@ -20,7 +20,7 @@ export function createAuth(config: AuthConfig): AuthResponse {
       if (!credentials || "token" in credentials === false) {
         throw new Error("Bearer auth requires a token");
       }
-      return AuthProviders.bearer(credentials, onTokenRefresh);
+      return AuthProviders.bearer(credentials);
 
     case "apiKey":
       if (!credentials || "apiKey" in credentials === false) {
@@ -52,7 +52,7 @@ export function createAuth(config: AuthConfig): AuthResponse {
       ) {
         throw new Error("OAuth2 requires clientId and clientSecret");
       }
-      return AuthProviders.oauth2(credentials, onTokenRefresh);
+      return AuthProviders.oauth2(credentials);
 
     default:
       throw new Error(`Unsupported auth method: ${method}`);

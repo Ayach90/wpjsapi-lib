@@ -23,7 +23,6 @@ export interface BasicAuthCredentials {
  */
 export interface BearerAuthCredentials {
   token: string;
-  refreshToken?: string;
 }
 
 /**
@@ -54,9 +53,7 @@ export interface NonceAuthCredentials {
 export interface OAuth2Credentials {
   clientId: string;
   clientSecret: string;
-  accessToken?: string;
-  refreshToken?: string;
-  scope?: string[];
+  accessToken: string;
 }
 
 /**
@@ -71,7 +68,6 @@ export interface AuthConfig {
     | HmacAuthCredentials
     | NonceAuthCredentials
     | OAuth2Credentials;
-  onTokenRefresh?: (newToken: string) => void | Promise<void>;
 }
 
 /**

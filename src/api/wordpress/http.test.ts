@@ -4,6 +4,7 @@ import {
   buildUrl,
   buildResourcePath,
   normalizeUrl,
+  makeApiRequest,
 } from "./http";
 
 describe("normalizeUrl", () => {
@@ -64,6 +65,18 @@ describe("normalizeUrl", () => {
   it("should handle root path", () => {
     const result = normalizeUrl("https://site.com", "/");
     expect(result).toBe("https://site.com/");
+  });
+
+  it("should reject empty baseUrl", () => {
+    expect(() => normalizeUrl("", "/wp/v2/posts")).toThrow(
+      "baseUrl must be an absolute http(s) URL"
+    );
+  });
+
+  it("should reject relative baseUrl", () => {
+    expect(() => normalizeUrl("/wp-json", "/wp/v2/posts")).toThrow(
+      "baseUrl must be an absolute http(s) URL"
+    );
   });
 });
 
@@ -228,9 +241,8 @@ describe("buildResourcePath", () => {
   });
 
   it("should handle base path with trailing slash", () => {
-    // Current implementation doesn't normalize slashes
     const path = buildResourcePath("/wp/v2/posts/", 123);
-    expect(path).toBe("/wp/v2/posts//123");
+    expect(path).toBe("/wp/v2/posts/123");
   });
 
   it("should handle base path without leading slash", () => {
@@ -244,5 +256,62 @@ describe("buildResourcePath", () => {
 
     expect(path1).toBe("/wp/v2/posts/123");
     expect(path2).toBe("/wp/v2/posts/revisions");
+  });
+});
+
+describe("makeApiRequest", () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  it("should retry auth refresh once and then throw", async () => {
+    const response = new Response(JSON.stringify({ message: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+
+    (global.fetch as any).mockResolvedValue(response);
+
+    const auth = {
+      headers: {},
+      shouldRefresh: vi.fn().mockResolvedValue(true),
+      refresh: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(
+      makeApiRequest({
+        baseUrl: "https://example.com",
+        path: "/wp/v2/posts",
+        auth,
+      })
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(auth.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("should preserve FormData bodies without JSON content type", async () => {
+    const response = new Response(JSON.stringify({ id: 1 }), { status: 200 });
+    (global.fetch as any).mockResolvedValue(response);
+
+    const formData = new FormData();
+    formData.append("title", "File");
+
+    await makeApiRequest({
+      baseUrl: "https://example.com",
+      path: "/wp/v2/media",
+      method: "POST",
+      body: formData,
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://example.com/wp/v2/media",
+      expect.objectContaining({
+        body: formData,
+      })
+    );
+
+    const [, init] = (global.fetch as any).mock.calls[0];
+    expect((init.headers as Headers).has("Content-Type")).toBe(false);
   });
 });
